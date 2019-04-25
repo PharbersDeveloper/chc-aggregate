@@ -1,0 +1,40 @@
+package com.pharbers.ahcaggregate.moudle
+
+case class afteraggredData(
+	                          market: String,
+	                          city: String,
+	                          date: String,
+	                          key: String,
+	                          keyType: String,
+	                          value: Double,
+	                          valueType: String,
+	                          product_name: String,
+	                          mole_name: String,
+	                          oad_type: String,
+	                          package_des: String,
+	                          pack_number: String,
+	                          corp_name: String,
+	                          delivery_way: String,
+	                          dosage_name: String,
+	                          product_id: String,
+	                          pack_id: String,
+	                          atc3: String,
+	                          var salesList: List[Double] = List(),
+	                          var shareList: List[Double] = List(),
+	                          var growthList: List[Double] = List(),
+	                          var shareGrowth: List[Double] = List(),
+	                          var keyList: List[String] = List(),
+	                          var dateList: List[String] = List(),
+	                          var mole_nameList: List[String] = List(),
+	                          var oad_typeList: List[String]= List(),
+	                          var package_desList: List[String] = List(),
+	                          var pack_numberList: List[String] = List(),
+	                          var corp_nameList: List[String] = List(),
+		                      var delivery_wayList: List[String] = List(),
+		                      var dosage_nameList: List[String] = List(),
+		                      var product_idList: List[String] = List(),
+		                      var pack_idList: List[String] = List(),
+		                      var atc3List: List[String] = List()
+                          ) extends Serializable {
+
+}

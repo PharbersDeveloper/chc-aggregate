@@ -44,9 +44,8 @@
                 </dependency>
                 <dependency>
                     <groupId>com.pharbers</groupId>
-                    <artifactId>pharbers-max-reflect</artifactId>
-                    <version>1.0</version>
-                    <scope>test</scope>
+                    <artifactId>pharbers-data-repository</artifactId>
+                    <version>1.0-SNAPSHOT</version>
                 </dependency>
 
                 <dependency>

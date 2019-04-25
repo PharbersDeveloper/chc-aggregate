@@ -13,15 +13,18 @@ case class generatePPTData() {
 		val filterList: List[(String, List[String])] = dataObj.filterList
 		val mergeList = dataObj.mergeList
 		val poivtList = dataObj.poivtList
-		val sortList = dataObj.sortList
+		val limitNum = dataObj.limitNum
+		val sortMap = dataObj.sortMap
 		val selectList = dataObj.selectList ++ valueTypeList.flatMap(x => dataList.map(y => y + x))
 		val titleList = dataObj.titleList
-		val resultArray = titleList ++ aggregateForTable().getTableResult(df, filterList, mergeList, poivtList, selectList,sortList)
+		val resultArray = titleList ++ aggregateForTable().getTableResult(df, filterList, mergeList, poivtList, selectList,
+			limitNum,sortMap)
 		val resultMap = resultArray.zipWithIndex.flatMap { case (arr, idx1) =>
 			arr.zipWithIndex.map{case (value, idx2) =>
 				Map("coordinate" -> ((idx2 + 65).toChar + (idx1+1).toString), "value" -> value)
 			}
-		}.map(x => x.filter(y => y._2 != ""))
+		}
+//			.map(x => x.filter(y => y._2 != ""))
 		save2Mongo().save(MongoDBObject("tableIndex" -> tableIndex, "cells" -> resultMap))
 	}
 }

@@ -2,7 +2,7 @@ package com.pharbers.ahcaggregate.ppt
 
 import com.pharbers.ahcaggregate.common.phFactory
 import com.pharbers.ahcaggregate.moudle.aggredData
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions._
 
