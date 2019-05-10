@@ -66,6 +66,13 @@ object chcAggregateFinalTest extends App {
 
 	val dataList = List("2017Q4YTD", "2018Q4YTD")
 	val valueTypeList = List("sales", "share")
+	val filterList: List[(String, List[String])] = List(
+		("market", List("降糖药市场")),
+		("keyType", List("oad")),
+		("city", List("北京市")),
+		("date", dataList),
+		("valueType", valueTypeList)
+	)
 	val mergeList = List("date", "valueType")
 	val poivtList = List("key")
 	val sortMap = Map("asc" -> col("2018Q4YTDsales"))
@@ -162,10 +169,9 @@ object chcAggregateFinalTest extends App {
 	val filterList_p8_t1_nationwide: List[(String, List[String])] = List(
 		("market", List("降糖药市场")),
 		("keyType", List("prod")),
-		("city", List("全国")),
+		("city", List("北京市")),
 		("date", dataList_p8_t1_nationwide),
-		("valueType", valueTypeList_p8_t1_nationwide),
-		("mole_name", List("二甲双胍"))
+		("valueType", valueTypeList_p8_t1_nationwide)
 	)
 	val titleList_p8_t1_nationwide = List(List("", "2017Q4YTD", "2018Q4YTD", "", ""))
 	val sortMap_p8_t1_nationwide = Map("asc" -> col("2018Q4YTDsales"))

@@ -93,7 +93,7 @@ case class cityPPT() {
 		val titleList_p5_t1 = List(List("", "2017Q4YTD", "2018Q4YTD", "", ""))
 		val sortMap_p5_t1 = Map("asc" -> col("2018Q4YTDsales"))
 		val limitNum_p6_t1 = 11
-		val p6_t1 = pptInputData("p6_t1_" + cityStr, dataList, valueTypeList, filterList_p5_1, mergeList, poivtList, limitNum_p6_t1,
+		val p6_t1 = pptInputData("p6_t1_sh", dataList, valueTypeList, filterList_p5_1, mergeList, poivtList, limitNum_p6_t1,
 			sortMap_p5_t1, sortStr_other, selectList, titleList_p5_t1, factory_nomal)
 
 		val dataList_p5_t2 = List("2018Q4YTD")
@@ -109,8 +109,7 @@ case class cityPPT() {
 		val sortMap_p6_t2 = Map("desc" -> col("2018Q4YTDsales"))
 		val titleList_p6_t2 = List(List("市场排名", "重点产品", "公司", "sales", "growth", "share", "shareGrowth", "EI"))
 		val limitNum_p6_t2 = 9
-		val mergeList_p6_t2 = List("date", "valueType")
-		val p6_t2 = pptInputData("p6_t2_" + cityStr, dataList_p5_t2, valueTypeList_p6_t2, filterList_p5_t2, mergeList_p6_t2, selectList_p5_t2,
+		val p6_t2 = pptInputData("p6_t2_" + cityStr, dataList_p5_t2, valueTypeList_p6_t2, filterList_p5_t2, mergeList, selectList_p5_t2,
 			limitNum_p6_t2, sortMap_p6_t2, sortStr_nomal, selectList_p5_t2, titleList_p6_t2, factory_rank)
 
 		val dataList_p6_t1 = List("2017Q1", "2017Q2", "2017Q3", "2017Q4", "2018Q1", "2018Q2", "2018Q3", "2018Q4")
@@ -137,9 +136,9 @@ case class cityPPT() {
 			("mole_name", List("二甲双胍"))
 		)
 		val sortMap_p8_t1 = Map("asc" -> col("2018Q4sales"))
-		val limitNump8_t1 = 10
+		val limitNump8_t1 = 9
 
-		val p8_t1 = pptInputData("p8_t1_" + cityStr, dataList_p6_t1, valueTypeList_p7_t1, filterList_p7_t1, mergeList, poivtList,
+		val p8_t1 = pptInputData("p8_t1_sh", dataList_p6_t1, valueTypeList_p7_t1, filterList_p7_t1, mergeList, poivtList,
 			limitNump8_t1, sortMap_p8_t1, sortStr_other, selectList, titleList_p6_t1, factory_nomal)
 //		List(p2_t1, p3_t1, p4_t1, p5_t1, p5_t2, p6_t1, p6_t2, p7_t1, p8_t1)
 		List(p6_t2)

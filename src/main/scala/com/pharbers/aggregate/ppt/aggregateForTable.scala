@@ -82,9 +82,9 @@ case class aggregateForTable() {
 		arr
 	}
 
-//	val split_udf: UserDefinedFunction = udf{
-//		str: String => str.split(31.toChar.toString).head
-//	}
+	val func_key: UserDefinedFunction = udf {
+		str: String => str.split(31.toChar.toString).head
+	}
 
 	def getTableResult(df: DataFrame, filterList: List[(String, List[String])], mergeList: List[String], poivtList: List[String],
 	                   selectedList: List[String], limitNum: Int, sortMap: Map[String, Column], sortStr: String): List[List[String]] = {
@@ -93,7 +93,7 @@ case class aggregateForTable() {
 		val poivtDF = df_poivt(mergedDF, poivtList, "titles")
 		val selectedDF = df_select(poivtDF, selectedList)
 		val shortedDF = df_sort(selectedDF, limitNum, sortMap, sortStr)
-//    		.withColumn("key", split_udf(col("key")))
+    		.withColumn("key", func_key(col("key")))
 		val result = df_collect(shortedDF)
 		result
 	}

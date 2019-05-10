@@ -41,8 +41,8 @@ case class aggregateData() extends Serializable {
 			.withColumnRenamed("DEV_PACK_ID", "PACK_ID")
 
 		val oad_groupList = List("MARKET", "CITY", "TIME", "OAD_TYPE")
-		val prod_groupList = List("MARKET", "CITY", "TIME", "PRODUCT_NAME", "MOLE_NAME", "PACKAGE_DES", "PACKAGE_NUMBER",
-			"CORP_NAME", "PACK_ID")
+//		val prod_groupList = List("MARKET", "CITY", "TIME", "PRODUCT_NAME", "MOLE_NAME", "PACKAGE_DES", "PACKAGE_NUMBER", "CORP_NAME", "PACK_ID")
+		val prod_groupList = List("MARKET", "CITY", "TIME", "PRODUCT_NAME", "CORP_NAME")
 		val mole_groupList = List("MARKET", "CITY", "TIME", "MOLE_NAME")
 		val corp_groupList = List("MARKET", "CITY", "TIME", "CORP_NAME")
 		val city_groupList = List("MARKET", "CITY", "TIME")
@@ -55,9 +55,10 @@ case class aggregateData() extends Serializable {
 			first("DOSAGE_NAME").as("DOSAGE_NAME"), first("PACK_ID").as("PACK_ID"),
 			first("ATC3").as("ATC3"))
 		val prod_aggfuncList = List(first("PRODUCT_ID").as("PRODUCT_ID"),
-			sum("SALES").as("SALES"), sum("UNITS").as("UNITS"),
+			sum("SALES").as("SALES"), sum("UNITS").as("UNITS"), first("MOLE_NAME").as("MOLE_NAME"),
+			first("PACKAGE_DES").as("PACKAGE_DES"), first("PACKAGE_NUMBER").as("PACKAGE_NUMBER"),
 			first("OAD_TYPE").as("OAD_TYPE"), first("DELIVERY_WAY").as("DELIVERY_WAY"),
-			first("DOSAGE_NAME").as("DOSAGE_NAME"), first("ATC3").as("ATC3"))
+			first("DOSAGE_NAME").as("DOSAGE_NAME"), first("ATC3").as("ATC3"), first("PACK_ID").as("PACK_ID"))
 		val mole_aggfuncList = List(first("PRODUCT_ID").as("PRODUCT_ID"),
 			sum("SALES").as("SALES"), sum("UNITS").as("UNITS"),
 			first("PRODUCT_NAME").as("PRODUCT_NAME"), first("OAD_TYPE").as("OAD_TYPE"),
@@ -79,8 +80,12 @@ case class aggregateData() extends Serializable {
 			first("OAD_TYPE").as("OAD_TYPE"), first("DELIVERY_WAY").as("DELIVERY_WAY"),
 			first("DOSAGE_NAME").as("DOSAGE_NAME"), first("PACK_ID").as("PACK_ID"),
 			first("ATC3").as("ATC3"), first("CORP_NAME").as("CORP_NAME"))
+		val func_mnf: UserDefinedFunction = udf {
+			(str1: String, str2: String) => str1 + 31.toChar.toString + str2
+		}
 		val oadDF = func_group(chcDFTemp, oad_groupList, oad_aggfuncList, selectList, "OAD_TYPE", "oad")
 		val prodDF = func_group(chcDFTemp, prod_groupList, prod_aggfuncList, selectList, "PRODUCT_NAME", "prod")
+    		.withColumn("key", func_mnf(col("key"), col("CORP_NAME")))
 		val moleDF = func_group(chcDFTemp, mole_groupList, mole_aggfuncList, selectList, "MOLE_NAME", "mole")
 		val corpDF = func_group(chcDFTemp, corp_groupList, corp_aggfuncList, selectList, "CORP_NAME", "corp")
 		val cityDF = func_group(chcDFTemp, city_groupList, city_aggfuncList, selectList, "CITY", "city")
@@ -384,15 +389,7 @@ case class aggregateData() extends Serializable {
 		})
 	}
 
-	def formatDF(df: DataFrame): DataFrame = {
-		//		中美上海施贵宝制药有限公司
-		//		德国默克公司
-		val func_replace: UserDefinedFunction = udf {
-			corp: String => {
-				if (corp == "中美上海施贵宝制药有限公司") "德国默克公司"
-				else corp
-			}
-		}
+	def formatDF(df: DataFrame): DataFrame ={
 		val resultDF = df.select("PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME", "DEV_MOLE_NAME",
 			"DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME", "DEV_PACK_ID",
 			"TIME", "name", "ATC3", "OAD_TYPE")
@@ -401,7 +398,6 @@ case class aggregateData() extends Serializable {
 			.withColumn("DEV_PACKAGE_NUMBER", col("DEV_PACKAGE_NUMBER").cast(StringType))
 			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
 			.na.fill("")
-    		.withColumn("DEV_CORP_NAME", func_replace(col("DEV_CORP_NAME")))
 		resultDF
 //		val prodDF = resultDF.select("MARKET", "CITY", "TIME", "PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME",
 //			"DEV_MOLE_NAME", "DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME",
@@ -457,8 +453,71 @@ case class aggregateData() extends Serializable {
 //			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
 //			.na.fill("")
 //		prodDF
+//		val resultDF = df.select("PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME", "DEV_MOLE_NAME",
+//			"DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME", "DEV_PACK_ID",
+//			"TIME", "name", "ATC3", "OAD_TYPE")
+//			.withColumnRenamed("name", "CITY")
+//			.withColumn("MARKET", lit("降糖药市场"))
+//			.withColumn("DEV_PACKAGE_NUMBER", col("DEV_PACKAGE_NUMBER").cast(StringType))
+//			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
+//			.na.fill("")
+//
+//		val prodDF = resultDF.select("MARKET", "CITY", "TIME", "PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME",
+//			"DEV_MOLE_NAME", "DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME",
+//			"DEV_PACK_ID", "ATC3", "OAD_TYPE")
+//			.toJavaRDD.rdd.map(x => formatData(x.get(0).toString, x.get(1).toString, x.get(2).toString,
+//			x.get(3).toString, x.get(4).toString.toDouble, x.get(5).toString.toDouble, x.get(6).toString, x.get(7).toString,
+//			x.get(8).toString, x.get(9).toString, x.get(10).toString, x.get(11).toString, x.get(12).toString,
+//			x.get(13).toString, x.get(14).toString, x.get(15).toString, product_id_list = List(x.get(3).toString),
+//			sales_list = List(x.get(4).toString.toDouble), units_list = List(x.get(5).toString.toDouble),
+//			mole_name_list = List(x.get(7).toString), package_list = List(x.get(8).toString), pack_num_list = List(x.get(9).toString),
+//			corp_name_list = List(x.get(10).toString), delivery_way_list = List(x.get(11).toString),
+//			dosage_name = List(x.get(12).toString), pack_id_list = List(x.get(13).toString),
+//			atc3_list = List(x.get(14).toString), oad_type_list = List(x.get(15).toString)
+//		)).keyBy(x => (x.MARKET, x.CITY, x.TIME, x.DEV_PRODUCT_NAME))
+//			.reduceByKey((left, right) => {
+//				left.product_id_list = left.product_id_list ++ right.product_id_list
+//				left.sales_list = left.sales_list ++ right.sales_list
+//				left.units_list = left.units_list ++ right.units_list
+//				left.mole_name_list = left.mole_name_list ++ right.mole_name_list
+//				left.package_list = left.package_list ++ right.package_list
+//				left.pack_num_list = left.pack_num_list ++ right.pack_num_list
+//				left.corp_name_list = left.corp_name_list ++ right.corp_name_list
+//				left.delivery_way_list = left.delivery_way_list ++ right.delivery_way_list
+//				left.dosage_name = left.dosage_name ++ right.dosage_name
+//				left.pack_id_list = left.pack_id_list ++ right.pack_id_list
+//				left.atc3_list = left.atc3_list ++ right.atc3_list
+//				left.oad_type_list = left.oad_type_list ++ right.oad_type_list
+//				left
+//			}).map(x => {
+//			val data = x._2
+//			val sales_list = data.sales_list
+//			val idx = sales_list.indexOf(sales_list.max)
+//			val salesValue = sales_list.sum
+//			val units_list = data.units_list
+//			val unitsValue = units_list.sum
+//			val product_id_list = data.product_id_list
+//			val mole_name_list = data.mole_name_list
+//			val package_list = data.package_list
+//			val pack_num_list = data.pack_num_list
+//			val corp_name_list = data.corp_name_list
+//			val delivery_way_list = data.delivery_way_list
+//			val dosage_name = data.dosage_name
+//			val pack_id_list = data.pack_id_list
+//			val atc3_list = data.atc3_list
+//			val oad_type_list = data.oad_type_list
+//			formatData(data.MARKET, data.CITY, data.TIME, product_id_list(idx), salesValue, unitsValue, data.DEV_PRODUCT_NAME,
+//				mole_name_list(idx), package_list(idx), pack_num_list(idx), corp_name_list(idx), delivery_way_list(idx),
+//				dosage_name(idx), pack_id_list(idx), atc3_list(idx), oad_type_list(idx))
+//		}).toDF().select("MARKET", "CITY", "TIME", "PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME",
+//			"DEV_MOLE_NAME", "DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME",
+//			"DEV_PACK_ID", "ATC3", "OAD_TYPE")
+//			.withColumn("DEV_PACKAGE_NUMBER", col("DEV_PACKAGE_NUMBER").cast(StringType))
+//			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
+//			.na.fill("")
+//		prodDF.show(false)
+//		prodDF
 	}
-
 	def getAggregate(chcDF: DataFrame): DataFrame = {
 		val func_YTDDate: UserDefinedFunction = udf {
 			date: String => date + "YTD"
