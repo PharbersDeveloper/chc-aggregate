@@ -1,4 +1,4 @@
-package com.pharbers.ahcaggregate.moudle
+package com.pharbers.aggregate.moudle
 
 case class aggredData(
                      market: String,

@@ -1,6 +1,6 @@
-package com.pharbers.ahcaggregate.moudle
+package com.pharbers.aggregate.moudle
 
-import org.apache.spark.sql.Column
+import org.apache.spark.sql.{Column, DataFrame}
 
 case class pptInputData(
 	                       tableIndex: String,
@@ -11,8 +11,10 @@ case class pptInputData(
 	                       poivtList: List[String],
 	                       limitNum: Int,
 	                       sortMap: Map[String, Column],
+	                       sortStr: String,
 	                       selectList: List[String],
-	                       titleList: List[List[String]]
+	                       titleList: List[List[String]],
+	                       factory: String
                        ) {
 
 }

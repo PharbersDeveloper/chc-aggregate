@@ -1,4 +1,4 @@
-package com.pharbers.ahcaggregate.util
+package com.pharbers.aggregate.util
 
 object timeUtil {
 	def getStartYQ(timeline: String): String = {

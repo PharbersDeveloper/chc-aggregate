@@ -1,4 +1,4 @@
-package com.pharbers.ahcaggregate.util
+package com.pharbers.aggregate.util
 
 object dataList extends Serializable {
 	val dataListCommon = List("2017Q3YTD", "2018Q3YTD")

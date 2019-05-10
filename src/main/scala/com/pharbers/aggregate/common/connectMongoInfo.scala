@@ -1,4 +1,4 @@
-package com.pharbers.ahcaggregate.common
+package com.pharbers.aggregate.common
 
 import com.pharbers.baseModules.PharbersInjectModule
 

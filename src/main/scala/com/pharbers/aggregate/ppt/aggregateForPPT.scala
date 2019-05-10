@@ -1,7 +1,7 @@
-package com.pharbers.ahcaggregate.ppt
+package com.pharbers.aggregate.ppt
 
-import com.pharbers.ahcaggregate.common.phFactory
-import com.pharbers.ahcaggregate.moudle.aggredData
+import com.pharbers.aggregate.common.phFactory
+import com.pharbers.aggregate.moudle.aggredData
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions._
@@ -33,8 +33,13 @@ case class aggregateForPPT() {
 	def aggregateSales(chcDF: DataFrame): Map[String, DataFrame] = {
 		val oadDF = func_group(chcDF, List("market", "city", "Date", "OAD类别"), "Sales")
 		val moleDF = func_group(chcDF, List("market", "city", "Date", "分子"), "Sales")
-		val prodDF = func_group(chcDF, List("market", "city", "Date", "Prod_Desc"), "Sales")
+//		val prodDF = func_group(chcDF, List("market", "city", "Date", "Prod_Desc"), "Sales")
+		val prodDF = func_group(chcDF, List("market", "city", "Date", "Prod_Desc", "MNF_Desc"), "Sales")
 		val mnfDF = func_group(chcDF, List("market", "city", "Date", "MNF_Desc"), "Sales")
+
+		val prodUDF: UserDefinedFunction = udf{
+			(str1: String, str2: String) => str1 + 31.toChar.toString + str2
+		}
 
 		val sumOadDF = func_group(oadDF, List("market", "city", "Date"), "Sales")
 			.withColumn("OAD类别", lit("total"))
@@ -53,7 +58,8 @@ case class aggregateForPPT() {
 		val sumProdDF = func_group(prodDF, List("market", "city", "Date"), "Sales")
 			.withColumn("Prod_Desc", lit("total"))
 			.withColumnRenamed("Date", "date")
-			.withColumnRenamed("Prod_Desc", "key")
+//			.withColumnRenamed("Prod_Desc", "key")
+    		.withColumn("key", prodUDF(col("Prod_Desc"), col("MNF_Desc")))
 			.withColumnRenamed("Sales", "value")
 			.select("market", "city", "date", "key", "value")
 			.union(prodDF)

@@ -1,4 +1,4 @@
-package com.pharbers.ahcaggregate.ppt
+package com.pharbers.aggregate.ppt
 
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.{Column, DataFrame, Row}
@@ -49,14 +49,31 @@ case class aggregateForTable() {
 
 
 	//5. df sort
-	def df_sort(df: DataFrame, limitNum: Int, sortMap: Map[String, Column]): DataFrame = {
+	def df_sort(df: DataFrame, limitNum: Int, sortMap: Map[String, Column], sortStr: String): DataFrame = {
 		val takeList = sortMap.values.toList.map(x => -x)
 		val sortList = sortMap.map(x => {
 			if (x._1 == "desc") -x._2
 			else x._2
 		}).toList
-		df.filter(col("key") === "其他")
-			.union(df.filter(col("key") =!= "其他").sort(takeList: _*).limit(limitNum).sort(sortList: _*))
+		val dfTop = df.filter(col("key") =!= "其他").sort(takeList: _*).limit(limitNum).sort(sortList: _*)
+		val func_nomal: DataFrame => DataFrame = dataframe => dataframe.filter(col("key") === "其他")
+		val func_other: DataFrame => DataFrame = dataframe => {
+			val func_filter: (String, List[String]) => Boolean = (str, lst) => {
+				if (lst.contains(str)) false
+				else true
+			}
+			val colList = df.columns.filter(x => x != "key").map(x => sum(x).as(x))
+			val topDF = df.sort(takeList: _*).limit(limitNum).sort(sortList: _*)
+			val keyList = topDF.select("key").collect().map(x => x.getString(0)).toList
+			val otherDF = df.filter(x => func_filter(x.get(0).toString, keyList))
+				.withColumn("key", lit("其他"))
+				.groupBy("key")
+				.agg(colList.head, colList.tail: _*)
+			otherDF
+		}
+		val funcMap = Map("nomal" -> func_nomal, "other" -> func_other)
+		val dfOther = funcMap(sortStr)(df)
+		dfOther.union(dfTop)
 	}
 
 	//6. df collect
@@ -65,13 +82,18 @@ case class aggregateForTable() {
 		arr
 	}
 
+//	val split_udf: UserDefinedFunction = udf{
+//		str: String => str.split(31.toChar.toString).head
+//	}
+
 	def getTableResult(df: DataFrame, filterList: List[(String, List[String])], mergeList: List[String], poivtList: List[String],
-	                   selectedList: List[String], limitNum: Int, sortMap: Map[String, Column]): List[List[String]] = {
+	                   selectedList: List[String], limitNum: Int, sortMap: Map[String, Column], sortStr: String): List[List[String]] = {
 		val filteredDF = df_filter(df, filterList).filter(col("key") =!= "total")
 		val mergedDF = df_merge(filteredDF, mergeList)
 		val poivtDF = df_poivt(mergedDF, poivtList, "titles")
 		val selectedDF = df_select(poivtDF, selectedList)
-		val shortedDF = df_sort(selectedDF, limitNum, sortMap)
+		val shortedDF = df_sort(selectedDF, limitNum, sortMap, sortStr)
+//    		.withColumn("key", split_udf(col("key")))
 		val result = df_collect(shortedDF)
 		result
 	}

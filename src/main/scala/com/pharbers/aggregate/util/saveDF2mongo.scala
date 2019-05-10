@@ -1,9 +1,9 @@
-package com.pharbers.ahcaggregate.util
+package com.pharbers.aggregate.util
 
 import com.mongodb.DBObject
 import com.mongodb.casbah.MongoClient
 import com.mongodb.casbah.commons.MongoDBObject
-import com.pharbers.ahcaggregate.common.{connectMongoInfo, phFactory}
+import com.pharbers.aggregate.common.{connectMongoInfo, phFactory}
 import com.pharbers.spark.util.dataFrame2Mongo
 import org.apache.spark.sql.DataFrame
 

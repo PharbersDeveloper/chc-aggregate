@@ -1,4 +1,4 @@
-package com.pharbers.ahcaggregate.moudle
+package com.pharbers.aggregate.moudle
 
 case class afteraggredData(
 	                          market: String,
@@ -34,7 +34,8 @@ case class afteraggredData(
 		                      var dosage_nameList: List[String] = List(),
 		                      var product_idList: List[String] = List(),
 		                      var pack_idList: List[String] = List(),
-		                      var atc3List: List[String] = List()
+		                      var atc3List: List[String] = List(),
+	                          var cityList: List[String] = List()
                           ) extends Serializable {
 
 }
