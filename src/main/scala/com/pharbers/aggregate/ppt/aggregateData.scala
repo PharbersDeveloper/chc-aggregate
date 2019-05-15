@@ -41,7 +41,7 @@ case class aggregateData() extends Serializable {
 			.withColumnRenamed("DEV_PACK_ID", "PACK_ID")
 
 		val oad_groupList = List("MARKET", "CITY", "TIME", "OAD_TYPE")
-//		val prod_groupList = List("MARKET", "CITY", "TIME", "PRODUCT_NAME", "MOLE_NAME", "PACKAGE_DES", "PACKAGE_NUMBER", "CORP_NAME", "PACK_ID")
+		//		val prod_groupList = List("MARKET", "CITY", "TIME", "PRODUCT_NAME", "MOLE_NAME", "PACKAGE_DES", "PACKAGE_NUMBER", "CORP_NAME", "PACK_ID")
 		val prod_groupList = List("MARKET", "CITY", "TIME", "PRODUCT_NAME", "CORP_NAME")
 		val mole_groupList = List("MARKET", "CITY", "TIME", "MOLE_NAME")
 		val corp_groupList = List("MARKET", "CITY", "TIME", "CORP_NAME")
@@ -85,7 +85,7 @@ case class aggregateData() extends Serializable {
 		}
 		val oadDF = func_group(chcDFTemp, oad_groupList, oad_aggfuncList, selectList, "OAD_TYPE", "oad")
 		val prodDF = func_group(chcDFTemp, prod_groupList, prod_aggfuncList, selectList, "PRODUCT_NAME", "prod")
-    		.withColumn("key", func_mnf(col("key"), col("CORP_NAME")))
+			.withColumn("key", func_mnf(col("key"), col("CORP_NAME")))
 		val moleDF = func_group(chcDFTemp, mole_groupList, mole_aggfuncList, selectList, "MOLE_NAME", "mole")
 		val corpDF = func_group(chcDFTemp, corp_groupList, corp_aggfuncList, selectList, "CORP_NAME", "corp")
 		val cityDF = func_group(chcDFTemp, city_groupList, city_aggfuncList, selectList, "CITY", "city")
@@ -108,11 +108,17 @@ case class aggregateData() extends Serializable {
 				left.salesList = left.salesList ++ right.salesList
 				left
 			}).flatMap(x => {
-			val dataList = x._2.dateList.distinct
-			val YTDData = dataList.map(x => func_getYTDData(x))
-			val YTDDataMap = dataList.zip(YTDData).filter(y => y._2.length == y._2.intersect(dataList).length && y._2.nonEmpty)
-			val resultMap = YTDDataMap.map(y => {
-				y._1 -> y._2.map(date => x._2.salesList(x._2.dateList.indexOf(date))).sum
+			val dateList = x._2.dateList
+			val salesList = x._2.salesList
+			val dateSalesList = dateList.zip(salesList)
+			val date_ytd = dateList.map(x => x.split("Q").head).distinct.flatMap(x => Range(1, 5).map(y => x + "Q" + y.toString))
+			val YTDData = date_ytd.map(x => x -> func_getYTDData(x))
+			val resultMap = YTDData.map(y => {
+				y._1 -> y._2.map(date => {
+					val idx = dateList.indexOf(date)
+					if (idx != -1) dateSalesList.filter(x => x._1 == date).map(x => x._2).sum
+					else 0
+				}).sum
 			}).toMap
 			resultMap.map(y =>
 				afteraggredData(x._2.market, x._2.city, y._1, x._2.key, x._2.keyType, y._2, x._2.valueType,
@@ -127,17 +133,22 @@ case class aggregateData() extends Serializable {
 		val func_moleShareKey: afteraggredData => List[String] = data => List(data.market, data.date, data.city,
 			data.keyType, data.mole_name)
 		val func_nationwideShare: afteraggredData => List[String] = data => List(data.market, data.date, data.keyType)
+		val func_nationwideMoleShare: afteraggredData => List[String] = data => List(data.market, data.date, data.keyType,
+			data.mole_name)
 		val func_cityKey: afteraggredData => List[String] = data => List(data.market, data.date, data.keyType)
-		val keyMap = Map("share" -> func_shareKey, "moleShare" -> func_moleShareKey, "nationwide" -> func_nationwideShare,
-			"cityShare" -> func_cityKey)
+		val keyMap = Map("share" -> func_shareKey, "moleShare" -> func_moleShareKey, "nationwideShare" -> func_nationwideShare,
+			"cityShare" -> func_cityKey, "nationwideMoleShare" -> func_nationwideMoleShare)
 		val func_shareFlat: afteraggredData => List[afteraggredData] = data => {
-			val keyList = data.keyList ++ List("total")
-			val salesListTemp = data.salesList
-			val totalSales = salesListTemp.sum
-			val salesList = data.salesList ++ List(totalSales)
+			val keyListTemp = data.keyList.distinct
+			val keyList = keyListTemp ++ List("total")
+			val keyListNormal = data.keyList ++ List("total")
+			val kvListTemp = data.keyList.zip(data.salesList)
+			val kvList = keyListTemp.map(key => key -> kvListTemp.filter(x => x._1 == key).map(x => x._2).sum)
+			val totalSales = kvList.map(x => x._2).sum
+			val salesList = kvList.map(x => x._2) ++ List(totalSales)
 			val shareList = salesList.map(y => y / totalSales)
 			val mole_nameList = data.mole_nameList ++ List(data.mole_nameList.last)
-			val oad_typeList = data.oad_typeList ++ List("total")
+			val oad_typeList = data.oad_typeList ++ List(data.oad_typeList.last)
 			val package_desList = data.package_desList ++ List("total")
 			val pack_numberList = data.pack_numberList ++ List("total")
 			val corp_nameList = data.corp_nameList ++ List("total")
@@ -147,16 +158,18 @@ case class aggregateData() extends Serializable {
 			val pack_idList = data.pack_idList ++ List("total")
 			val atc3List = data.atc3List ++ List("total")
 			val salesData = keyList.zipWithIndex.map { case (key, idx) =>
+				val idxnormal = keyListNormal.indexOf(key)
 				afteraggredData(data.market, data.city, data.date, key, data.keyType, salesList(idx), "sales",
-					data.product_name, mole_nameList(idx), oad_typeList(idx), package_desList(idx), pack_numberList(idx),
-					corp_nameList(idx), delivery_wayList(idx), dosage_nameList(idx), product_idList(idx), pack_idList(idx),
-					atc3List(idx))
+					data.product_name, mole_nameList(idxnormal), oad_typeList(idxnormal), package_desList(idxnormal),
+					pack_numberList(idxnormal), corp_nameList(idxnormal), delivery_wayList(idxnormal),
+					dosage_nameList(idxnormal), product_idList(idxnormal), pack_idList(idxnormal), atc3List(idxnormal))
 			}
 			val shareData = keyList.zipWithIndex.map { case (key, idx) =>
+				val idxnormal = keyListNormal.indexOf(key)
 				afteraggredData(data.market, data.city, data.date, key, data.keyType, shareList(idx), valueType,
-					data.product_name, mole_nameList(idx), oad_typeList(idx), package_desList(idx), pack_numberList(idx),
-					corp_nameList(idx), delivery_wayList(idx), dosage_nameList(idx), product_idList(idx), pack_idList(idx),
-					atc3List(idx))
+					data.product_name, mole_nameList(idxnormal), oad_typeList(idxnormal), package_desList(idxnormal),
+					pack_numberList(idxnormal), corp_nameList(idxnormal), delivery_wayList(idxnormal),
+					dosage_nameList(idxnormal), product_idList(idxnormal), pack_idList(idxnormal), atc3List(idxnormal))
 			}
 			salesData ++ shareData
 		}
@@ -183,14 +196,17 @@ case class aggregateData() extends Serializable {
 		//			}
 		//			shareData
 		//		}
-		val func_nationwideFlat: afteraggredData => List[afteraggredData] = data => {
-			val keyList = data.keyList ++ List("total")
-			val salesListTemp = data.salesList
-			val totalSales = salesListTemp.sum
-			val salesList = data.salesList ++ List(totalSales)
+		val func_nationwideShareFlat: afteraggredData => List[afteraggredData] = data => {
+			val keyListTemp = data.keyList.distinct
+			val keyList = keyListTemp ++ List("total")
+			val keyListNormal = data.keyList ++ List("total")
+			val kvListTemp = data.keyList.zip(data.salesList)
+			val kvList = keyListTemp.map(key => key -> kvListTemp.filter(x => x._1 == key).map(x => x._2).sum)
+			val totalSales = kvList.map(x => x._2).sum
+			val salesList = kvList.map(x => x._2) ++ List(totalSales)
 			val shareList = salesList.map(y => y / totalSales)
-			val mole_nameList = data.mole_nameList ++ List("total")
-			val oad_typeList = data.oad_typeList ++ List("total")
+			val mole_nameList = data.mole_nameList ++ List(data.mole_nameList.last)
+			val oad_typeList = data.oad_typeList ++ List(data.oad_typeList.last)
 			val package_desList = data.package_desList ++ List("total")
 			val pack_numberList = data.pack_numberList ++ List("total")
 			val corp_nameList = data.corp_nameList ++ List("total")
@@ -199,17 +215,20 @@ case class aggregateData() extends Serializable {
 			val product_idList = data.product_idList ++ List("total")
 			val pack_idList = data.pack_idList ++ List("total")
 			val atc3List = data.atc3List ++ List("total")
+			val valueTypeMap = Map("nationwideShare" -> "share", "nationwideMoleShare" -> "moleShare")
 			val salesData = keyList.zipWithIndex.map { case (key, idx) =>
+				val idxNormal = keyListNormal.indexOf(key)
 				afteraggredData(data.market, "全国", data.date, key, data.keyType, salesList(idx), "sales",
-					data.product_name, mole_nameList(idx), oad_typeList(idx), package_desList(idx), pack_numberList(idx),
-					corp_nameList(idx), delivery_wayList(idx), dosage_nameList(idx), product_idList(idx), pack_idList(idx),
-					atc3List(idx))
+					data.product_name, mole_nameList(idxNormal), oad_typeList(idxNormal), package_desList(idxNormal),
+					pack_numberList(idxNormal), corp_nameList(idxNormal), delivery_wayList(idxNormal),
+					dosage_nameList(idxNormal), product_idList(idxNormal), pack_idList(idxNormal), atc3List(idxNormal))
 			}
 			val shareData = keyList.zipWithIndex.map { case (key, idx) =>
-				afteraggredData(data.market, "全国", data.date, key, data.keyType, shareList(idx), "share",
-					data.product_name, mole_nameList(idx), oad_typeList(idx), package_desList(idx), pack_numberList(idx),
-					corp_nameList(idx), delivery_wayList(idx), dosage_nameList(idx), product_idList(idx), pack_idList(idx),
-					atc3List(idx))
+				val idxNormal = keyListNormal.indexOf(key)
+				afteraggredData(data.market, "全国", data.date, key, data.keyType, shareList(idx), valueTypeMap(valueType),
+					data.product_name, mole_nameList(idxNormal), oad_typeList(idxNormal), package_desList(idxNormal),
+					pack_numberList(idxNormal), corp_nameList(idxNormal), delivery_wayList(idxNormal),
+					dosage_nameList(idxNormal), product_idList(idxNormal), pack_idList(idxNormal), atc3List(idxNormal))
 			}
 			salesData ++ shareData
 		}
@@ -237,8 +256,8 @@ case class aggregateData() extends Serializable {
 			}
 			shareData
 		}
-		val flatFuncMap = Map("share" -> func_shareFlat, "moleShare" -> func_shareFlat, "nationwide" -> func_nationwideFlat,
-			"cityShare" -> func_cityShareFlat)
+		val flatFuncMap = Map("share" -> func_shareFlat, "moleShare" -> func_shareFlat, "nationwideShare" -> func_nationwideShareFlat,
+			"cityShare" -> func_cityShareFlat, "nationwideMoleShare" -> func_nationwideShareFlat)
 		groupedDF.toJavaRDD.rdd.map(x => afteraggredData(x.get(0).toString, x.get(1).toString, x.get(2).toString,
 			x.get(3).toString, x.get(4).toString, x.get(5).toString.toDouble, x.get(6).toString, x.get(7).toString,
 			x.get(8).toString, x.get(9).toString, x.get(10).toString, x.get(11).toString, x.get(12).toString,
@@ -368,8 +387,8 @@ case class aggregateData() extends Serializable {
 				left
 			}).flatMap(x => {
 			val marketGrowth = x._2.growthList(x._2.keyList.indexOf("total"))
-			val mole_nameList = x._2.mole_nameList ++ List("total")
-			val oad_typeList = x._2.oad_typeList ++ List("total")
+			val mole_nameList = x._2.mole_nameList ++ List(x._2.mole_nameList.last)
+			val oad_typeList = x._2.oad_typeList ++ List(x._2.oad_typeList.last)
 			val package_desList = x._2.package_desList ++ List("total")
 			val pack_numberList = x._2.pack_numberList ++ List("total")
 			val corp_nameList = x._2.corp_nameList ++ List("total")
@@ -389,7 +408,15 @@ case class aggregateData() extends Serializable {
 		})
 	}
 
-	def formatDF(df: DataFrame): DataFrame ={
+	def formatDF(df: DataFrame): DataFrame = {
+		//		中美上海施贵宝制药有限公司
+		//		德国默克公司
+		val func_replace: UserDefinedFunction = udf {
+			corp: String => {
+				if (corp == "中美上海施贵宝制药有限公司") "德国默克公司"
+				else corp
+			}
+		}
 		val resultDF = df.select("PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME", "DEV_MOLE_NAME",
 			"DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME", "DEV_PACK_ID",
 			"TIME", "name", "ATC3", "OAD_TYPE")
@@ -397,127 +424,30 @@ case class aggregateData() extends Serializable {
 			.withColumn("MARKET", lit("降糖药市场"))
 			.withColumn("DEV_PACKAGE_NUMBER", col("DEV_PACKAGE_NUMBER").cast(StringType))
 			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
+			.withColumn("DEV_CORP_NAME", func_replace(col("DEV_CORP_NAME")))
 			.na.fill("")
 		resultDF
-//		val prodDF = resultDF.select("MARKET", "CITY", "TIME", "PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME",
-//			"DEV_MOLE_NAME", "DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME",
-//			"DEV_PACK_ID", "ATC3", "OAD_TYPE")
-//			.toJavaRDD.rdd.map(x => formatData(x.get(0).toString, x.get(1).toString, x.get(2).toString,
-//			x.get(3).toString, x.get(4).toString.toDouble, x.get(5).toString.toDouble, x.get(6).toString, x.get(7).toString,
-//			x.get(8).toString, x.get(9).toString, x.get(10).toString, x.get(11).toString, x.get(12).toString,
-//			x.get(13).toString, x.get(14).toString, x.get(15).toString, product_id_list = List(x.get(3).toString),
-//			sales_list = List(x.get(4).toString.toDouble), units_list = List(x.get(5).toString.toDouble),
-//			mole_name_list = List(x.get(7).toString), package_list = List(x.get(8).toString), pack_num_list = List(x.get(9).toString),
-//			corp_name_list = List(x.get(10).toString), delivery_way_list = List(x.get(11).toString),
-//			dosage_name = List(x.get(12).toString), pack_id_list = List(x.get(13).toString),
-//			atc3_list = List(x.get(14).toString), oad_type_list = List(x.get(15).toString)
-//		)).keyBy(x => (x.MARKET, x.CITY, x.TIME, x.DEV_PRODUCT_NAME))
-//			.reduceByKey((left, right) => {
-//				left.product_id_list = left.product_id_list ++ right.product_id_list
-//				left.sales_list = left.sales_list ++ right.sales_list
-//				left.units_list = left.units_list ++ right.units_list
-//				left.mole_name_list = left.mole_name_list ++ right.mole_name_list
-//				left.package_list = left.package_list ++ right.package_list
-//				left.pack_num_list = left.pack_num_list ++ right.pack_num_list
-//				left.corp_name_list = left.corp_name_list ++ right.corp_name_list
-//				left.delivery_way_list = left.delivery_way_list ++ right.delivery_way_list
-//				left.dosage_name = left.dosage_name ++ right.dosage_name
-//				left.pack_id_list = left.pack_id_list ++ right.pack_id_list
-//				left.atc3_list = left.atc3_list ++ right.atc3_list
-//				left.oad_type_list = left.oad_type_list ++ right.oad_type_list
-//				left
-//			}).map(x => {
-//			val data = x._2
-//			val sales_list = data.sales_list
-//			val idx = sales_list.indexOf(sales_list.max)
-//			val salesValue = sales_list.sum
-//			val units_list = data.units_list
-//			val unitsValue = units_list.sum
-//			val product_id_list = data.product_id_list
-//			val mole_name_list = data.mole_name_list
-//			val package_list = data.package_list
-//			val pack_num_list = data.pack_num_list
-//			val corp_name_list = data.corp_name_list
-//			val delivery_way_list = data.delivery_way_list
-//			val dosage_name = data.dosage_name
-//			val pack_id_list = data.pack_id_list
-//			val atc3_list = data.atc3_list
-//			val oad_type_list = data.oad_type_list
-//			formatData(data.MARKET, data.CITY, data.TIME, product_id_list(idx), salesValue, unitsValue, data.DEV_PRODUCT_NAME,
-//				mole_name_list(idx), package_list(idx), pack_num_list(idx), corp_name_list(idx), delivery_way_list(idx),
-//				dosage_name(idx), pack_id_list(idx), atc3_list(idx), oad_type_list(idx))
-//		}).toDF().select("MARKET", "CITY", "TIME", "PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME",
-//			"DEV_MOLE_NAME", "DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME",
-//			"DEV_PACK_ID", "ATC3", "OAD_TYPE")
-//			.withColumn("DEV_PACKAGE_NUMBER", col("DEV_PACKAGE_NUMBER").cast(StringType))
-//			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
-//			.na.fill("")
-//		prodDF
-//		val resultDF = df.select("PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME", "DEV_MOLE_NAME",
-//			"DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME", "DEV_PACK_ID",
-//			"TIME", "name", "ATC3", "OAD_TYPE")
-//			.withColumnRenamed("name", "CITY")
-//			.withColumn("MARKET", lit("降糖药市场"))
-//			.withColumn("DEV_PACKAGE_NUMBER", col("DEV_PACKAGE_NUMBER").cast(StringType))
-//			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
-//			.na.fill("")
-//
-//		val prodDF = resultDF.select("MARKET", "CITY", "TIME", "PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME",
-//			"DEV_MOLE_NAME", "DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME",
-//			"DEV_PACK_ID", "ATC3", "OAD_TYPE")
-//			.toJavaRDD.rdd.map(x => formatData(x.get(0).toString, x.get(1).toString, x.get(2).toString,
-//			x.get(3).toString, x.get(4).toString.toDouble, x.get(5).toString.toDouble, x.get(6).toString, x.get(7).toString,
-//			x.get(8).toString, x.get(9).toString, x.get(10).toString, x.get(11).toString, x.get(12).toString,
-//			x.get(13).toString, x.get(14).toString, x.get(15).toString, product_id_list = List(x.get(3).toString),
-//			sales_list = List(x.get(4).toString.toDouble), units_list = List(x.get(5).toString.toDouble),
-//			mole_name_list = List(x.get(7).toString), package_list = List(x.get(8).toString), pack_num_list = List(x.get(9).toString),
-//			corp_name_list = List(x.get(10).toString), delivery_way_list = List(x.get(11).toString),
-//			dosage_name = List(x.get(12).toString), pack_id_list = List(x.get(13).toString),
-//			atc3_list = List(x.get(14).toString), oad_type_list = List(x.get(15).toString)
-//		)).keyBy(x => (x.MARKET, x.CITY, x.TIME, x.DEV_PRODUCT_NAME))
-//			.reduceByKey((left, right) => {
-//				left.product_id_list = left.product_id_list ++ right.product_id_list
-//				left.sales_list = left.sales_list ++ right.sales_list
-//				left.units_list = left.units_list ++ right.units_list
-//				left.mole_name_list = left.mole_name_list ++ right.mole_name_list
-//				left.package_list = left.package_list ++ right.package_list
-//				left.pack_num_list = left.pack_num_list ++ right.pack_num_list
-//				left.corp_name_list = left.corp_name_list ++ right.corp_name_list
-//				left.delivery_way_list = left.delivery_way_list ++ right.delivery_way_list
-//				left.dosage_name = left.dosage_name ++ right.dosage_name
-//				left.pack_id_list = left.pack_id_list ++ right.pack_id_list
-//				left.atc3_list = left.atc3_list ++ right.atc3_list
-//				left.oad_type_list = left.oad_type_list ++ right.oad_type_list
-//				left
-//			}).map(x => {
-//			val data = x._2
-//			val sales_list = data.sales_list
-//			val idx = sales_list.indexOf(sales_list.max)
-//			val salesValue = sales_list.sum
-//			val units_list = data.units_list
-//			val unitsValue = units_list.sum
-//			val product_id_list = data.product_id_list
-//			val mole_name_list = data.mole_name_list
-//			val package_list = data.package_list
-//			val pack_num_list = data.pack_num_list
-//			val corp_name_list = data.corp_name_list
-//			val delivery_way_list = data.delivery_way_list
-//			val dosage_name = data.dosage_name
-//			val pack_id_list = data.pack_id_list
-//			val atc3_list = data.atc3_list
-//			val oad_type_list = data.oad_type_list
-//			formatData(data.MARKET, data.CITY, data.TIME, product_id_list(idx), salesValue, unitsValue, data.DEV_PRODUCT_NAME,
-//				mole_name_list(idx), package_list(idx), pack_num_list(idx), corp_name_list(idx), delivery_way_list(idx),
-//				dosage_name(idx), pack_id_list(idx), atc3_list(idx), oad_type_list(idx))
-//		}).toDF().select("MARKET", "CITY", "TIME", "PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME",
-//			"DEV_MOLE_NAME", "DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME",
-//			"DEV_PACK_ID", "ATC3", "OAD_TYPE")
-//			.withColumn("DEV_PACKAGE_NUMBER", col("DEV_PACKAGE_NUMBER").cast(StringType))
-//			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
-//			.na.fill("")
-//		prodDF.show(false)
-//		prodDF
 	}
+
+	def moleEI(rdd: RDD[afteraggredData], valueType: String): RDD[afteraggredData] = {
+		val func_value: afteraggredData => afteraggredData = data => {
+			data.salesList = List(data.value)
+			data
+		}
+		val func_growth: (Map[String, String], afteraggredData) => Seq[afteraggredData] = (growthQuaterMap, data) => {
+			val growthDateSeq = growthQuaterMap.keys.toSeq
+			val growthValue = growthQuaterMap.map(dateMap => {
+				val quaterValue = data.salesList(data.dateList.indexOf(dateMap._1))
+				val lastQuaterValue = data.salesList(data.dateList.indexOf(dateMap._2))
+				quaterValue / lastQuaterValue
+			}).toList
+			growthDateSeq.map(date => afteraggredData(data.market, data.city, date, data.key, data.keyType, growthValue(growthDateSeq.indexOf(date)),
+				valueType, data.product_name, data.mole_name, data.oad_type, data.package_des, data.pack_number,
+				data.corp_name, data.delivery_way, data.dosage_name, data.product_id, data.pack_id, data.atc3))
+		}
+		growth(rdd, func_value, func_growth)
+	}
+
 	def getAggregate(chcDF: DataFrame): DataFrame = {
 		val func_YTDDate: UserDefinedFunction = udf {
 			date: String => date + "YTD"
@@ -525,15 +455,24 @@ case class aggregateData() extends Serializable {
 		val getResult: DataFrame => DataFrame = df => {
 			val df_keyWithcity = df.filter(col("keyType") =!= "city")
 			val df_nationwide = df.filter(col("keyType") === "city")
-			val shareResult = getShareDF(df_keyWithcity, "share").union(getShareDF(df_keyWithcity, "nationwide"))
+			val shareResult = getShareDF(df_keyWithcity, "share").union(getShareDF(df_keyWithcity, "nationwideShare"))
 				.union(getShareDF(df_nationwide, "cityShare"))
 			//TODO: 全国的moleShare
+			val nationwideMoleResult = getShareDF(df_keyWithcity, "nationwideMoleShare")
+			val nationwidemoleSalesRDD = nationwideMoleResult.filter(x => x.valueType == "sales")
+			val nationwideMoleSalesGrowthRDD = salesGrowth(nationwidemoleSalesRDD, "growth")
+			val nationwideMoleShareRDD = nationwideMoleResult.filter(x => x.valueType == "moleShare")
+			val nationwideMoleEIRDD = moleEI(nationwideMoleShareRDD, "moleEI")
+			val testDF = nationwideMoleEIRDD.toDF()
+			val nationwideMoleShareGrowthRDD = shareGrowth(nationwideMoleShareRDD, "moleShareGrowth")
+
+			//moleShare city
 			val moleResult = getShareDF(df_keyWithcity, "moleShare")
 			val moleSalesRDD = moleResult.filter(x => x.valueType == "sales")
 			val molesalesGrowthRDD = salesGrowth(moleSalesRDD, "growth")
-			val moleEIRDD = aggregateEI(molesalesGrowthRDD, "moleEI")
 			val moleShareRDD = moleResult.filter(x => x.valueType == "moleShare")
-			val moleShareGrowthRDD = salesGrowth(moleShareRDD, "moleShareGrowth")
+			val moleEIRDD = moleEI(moleShareRDD, "moleEI")
+			val moleShareGrowthRDD = shareGrowth(moleShareRDD, "moleShareGrowth")
 
 			val salseRDD = shareResult.filter(x => x.valueType == "sales")
 			val shareRDD = shareResult.filter(x => x.valueType == "share")
@@ -542,7 +481,8 @@ case class aggregateData() extends Serializable {
 			val shareGrowthRDD = shareGrowth(shareRDD, "shareGrowth")
 
 			val EIRDD = aggregateEI(salesGrowthRDD, "EI")
-			val dfList = List(salseRDD, shareRDD, salesGrowthRDD, shareGrowthRDD, EIRDD, moleShareRDD, moleShareGrowthRDD, moleEIRDD).map(x => x.toDF())
+			val dfList = List(salseRDD, shareRDD, salesGrowthRDD, shareGrowthRDD, EIRDD, moleShareRDD, moleShareGrowthRDD,
+				moleEIRDD, nationwideMoleEIRDD, nationwideMoleShareGrowthRDD, nationwideMoleShareRDD).map(x => x.toDF())
 			unionDF(dfList.head, dfList.tail)
 		}
 		val resultList = List("market", "city", "date", "key", "keyType", "value", "valueType", "product_name", "mole_name",

@@ -14,7 +14,8 @@ case class pptInputData(
 	                       sortStr: String,
 	                       selectList: List[String],
 	                       titleList: List[List[String]],
-	                       factory: String
+	                       factory: String,
+	                       keyProdList: List[String]
                        ) {
 
 }

@@ -1,8 +1,8 @@
-package com.pharbers.ahcaggregate
+package com.pharbers.aggregate
 
 import org.apache.spark.sql.functions._
-import com.pharbers.ahcaggregate.common.phFactory
-import com.pharbers.ahcaggregate.moudle.aggredData
+import com.pharbers.aggregate.common.phFactory
+import com.pharbers.aggregate.moudle.aggredData
 import com.pharbers.spark.util.readCsv
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.expressions.UserDefinedFunction

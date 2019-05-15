@@ -49,23 +49,31 @@ case class aggregateForTable() {
 
 
 	//5. df sort
-	def df_sort(df: DataFrame, limitNum: Int, sortMap: Map[String, Column], sortStr: String): DataFrame = {
+	def df_sort(df: DataFrame, limitNum: Int, sortMap: Map[String, Column], sortStr: String, keyProdList: List[String]): DataFrame = {
 		val takeList = sortMap.values.toList.map(x => -x)
 		val sortList = sortMap.map(x => {
 			if (x._1 == "desc") -x._2
 			else x._2
 		}).toList
-		val dfTop = df.filter(col("key") =!= "其他").sort(takeList: _*).limit(limitNum).sort(sortList: _*)
+		val func_filter: UserDefinedFunction = udf {
+			str: String => keyProdList.contains(str.split(31.toChar.toString).head)
+		}
+		val keyProductDF = df.filter(func_filter(col("key")))
+		val dfTop = if (keyProdList.isEmpty) df.filter(col("key") =!= "其他").sort(takeList: _*).limit(limitNum)
+			.union(keyProductDF)
+			.sort(sortList: _*)
+		else df.filter(col("key") =!= "其他" && !func_filter(col("key"))).sort(takeList: _*).limit(limitNum)
+			.union(keyProductDF)
+			.sort(sortList: _*)
 		val func_nomal: DataFrame => DataFrame = dataframe => dataframe.filter(col("key") === "其他")
 		val func_other: DataFrame => DataFrame = dataframe => {
 			val func_filter: (String, List[String]) => Boolean = (str, lst) => {
 				if (lst.contains(str)) false
 				else true
 			}
-			val colList = df.columns.filter(x => x != "key").map(x => sum(x).as(x))
-			val topDF = df.sort(takeList: _*).limit(limitNum).sort(sortList: _*)
-			val keyList = topDF.select("key").collect().map(x => x.getString(0)).toList
-			val otherDF = df.filter(x => func_filter(x.get(0).toString, keyList))
+			val colList = dataframe.columns.filter(x => x != "key").map(x => sum(x).as(x))
+			val keyList = dfTop.select("key").collect().map(x => x.getString(0)).toList
+			val otherDF = dataframe.filter(x => func_filter(x.get(0).toString, keyList))
 				.withColumn("key", lit("其他"))
 				.groupBy("key")
 				.agg(colList.head, colList.tail: _*)
@@ -87,13 +95,14 @@ case class aggregateForTable() {
 	}
 
 	def getTableResult(df: DataFrame, filterList: List[(String, List[String])], mergeList: List[String], poivtList: List[String],
-	                   selectedList: List[String], limitNum: Int, sortMap: Map[String, Column], sortStr: String): List[List[String]] = {
+	                   selectedList: List[String], limitNum: Int, sortMap: Map[String, Column], sortStr: String,
+	                   keyProdList: List[String]): List[List[String]] = {
 		val filteredDF = df_filter(df, filterList).filter(col("key") =!= "total")
 		val mergedDF = df_merge(filteredDF, mergeList)
 		val poivtDF = df_poivt(mergedDF, poivtList, "titles")
 		val selectedDF = df_select(poivtDF, selectedList)
-		val shortedDF = df_sort(selectedDF, limitNum, sortMap, sortStr)
-    		.withColumn("key", func_key(col("key")))
+		val shortedDF = df_sort(selectedDF, limitNum, sortMap, sortStr, keyProdList)
+			.withColumn("key", func_key(col("key")))
 		val result = df_collect(shortedDF)
 		result
 	}

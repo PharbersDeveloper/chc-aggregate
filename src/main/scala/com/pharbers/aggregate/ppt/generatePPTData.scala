@@ -18,8 +18,9 @@ case class generatePPTData() extends phCommand {
 		val sortStr = dataObj.sortStr
 		val selectList = dataObj.selectList ++ valueTypeList.flatMap(x => dataList.map(y => y + x))
 		val titleList = dataObj.titleList
+		val keyProdList = dataObj.keyProdList
 		val resultArray = titleList ++ aggregateForTable().getTableResult(df, filterList, mergeList, poivtList, selectList,
-			limitNum,sortMap, sortStr)
+			limitNum,sortMap, sortStr, keyProdList)
 		val resultMap = resultArray.zipWithIndex.flatMap { case (arr, idx1) =>
 			arr.zipWithIndex.map{case (value, idx2) =>
 				Map("coordinate" -> ((idx2 + 65).toChar + (idx1+1).toString), "value" -> value)

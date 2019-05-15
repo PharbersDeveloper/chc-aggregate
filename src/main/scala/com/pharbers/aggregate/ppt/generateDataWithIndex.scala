@@ -18,8 +18,9 @@ case class generateDataWithIndex() extends phCommand {
 		val sortStr = dataObj.sortStr
 		val selectList = dataObj.selectList ++ valueTypeList.flatMap(x => dataList.map(y => y + x))
 		val titleList = dataObj.titleList
+		val keyProdList = dataObj.keyProdList
 		val dataResult = aggregateForTable().getTableResult(df, filterList, mergeList, poivtList, selectList,
-			limitNum,sortMap, sortStr)
+			limitNum,sortMap, sortStr, keyProdList)
 		val rankedResult = dataResult.zipWithIndex.map{case (lst, idx) => List((idx + 1).toString) ++ lst}
 		val resultArray = titleList ++ rankedResult
 		val resultMap = resultArray.zipWithIndex.flatMap { case (arr, idx1) =>
