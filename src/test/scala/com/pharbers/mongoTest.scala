@@ -28,7 +28,6 @@ import org.apache.spark.sql.functions.col
 //	val sortStr_nomal = "nomal"
 //	val sortStr_other = "other"
 //	val factory_nomal = "com.pharbers.aggregate.ppt.generatePPTData"
-//	val factory_rank = "com.pharbers.aggregate.ppt.generateDataWithIndex"
 //	val p2_t1_bj = pptInputData("p2_t1", dataList, valueTypeList, filterList, mergeList, poivtList, limitNum_p2_t1, sortMap,
 //		sortStr_nomal, selectList, titleList, factory_nomal)
 //
@@ -165,7 +164,6 @@ import org.apache.spark.sql.functions.col
 //val sortStr_nomal = "nomal"
 //val sortStr_other = "other"
 //val factory_nomal = "com.pharbers.aggregate.ppt.generatePPTData"
-//val factory_rank = "com.pharbers.aggregate.ppt.generateDataWithIndex"
 //val p2_t1_sh = pptInputData("p2_t1", dataList, valueTypeList, filterList, mergeList, poivtList, limitNum_p2_t1, sortMap,
 //	sortStr_nomal, selectList, titleList, factory_nomal)
 //

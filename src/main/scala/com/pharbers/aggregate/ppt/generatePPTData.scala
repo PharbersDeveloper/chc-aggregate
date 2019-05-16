@@ -1,9 +1,8 @@
 package com.pharbers.aggregate.ppt
 
-import com.mongodb.casbah.commons.MongoDBObject
 import com.pharbers.aggregate.moudle.pptInputData
-import com.pharbers.aggregate.util.save2Mongo
 import org.apache.spark.sql.DataFrame
+import com.pharbers.data.util._
 
 case class generatePPTData() extends phCommand {
 	override def exec(dataObj: pptInputData, df: DataFrame): Unit ={
@@ -11,21 +10,15 @@ case class generatePPTData() extends phCommand {
 		val dataList = dataObj.dataList
 		val valueTypeList = dataObj.valueTypeList
 		val filterList: List[(String, List[String])] = dataObj.filterList
-		val mergeList = dataObj.mergeList
-		val poivtList = dataObj.poivtList
 		val limitNum = dataObj.limitNum
-		val sortMap = dataObj.sortMap
-		val sortStr = dataObj.sortStr
-		val selectList = dataObj.selectList ++ valueTypeList.flatMap(x => dataList.map(y => y + x))
+		val sortStr = dataObj.sortOrder
+		val selectList = dataObj.selectList ++ valueTypeList
+//		++ valueTypeList.flatMap(x => dataList.map(y => y + x))
 		val titleList = dataObj.titleList
 		val keyProdList = dataObj.keyProdList
-		val resultArray = titleList ++ aggregateForTable().getTableResult(df, filterList, mergeList, poivtList, selectList,
-			limitNum,sortMap, sortStr, keyProdList)
-		val resultMap = resultArray.zipWithIndex.flatMap { case (arr, idx1) =>
-			arr.zipWithIndex.map{case (value, idx2) =>
-				Map("coordinate" -> ((idx2 + 65).toChar + (idx1+1).toString), "value" -> value)
-			}
-		}
-		save2Mongo().save(MongoDBObject("tableIndex" -> tableIndex, "cells" -> resultMap))
+		val otherTag = dataObj.otherTag
+		val resultDF = aggregateForTable().getTableResult(df, filterList, selectList, keyProdList,
+			dataList, titleList, valueTypeList, limitNum, sortStr, otherTag, tableIndex)
+		resultDF.save2Mongo("chc-ppt")
 	}
 }

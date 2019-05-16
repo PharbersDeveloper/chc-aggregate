@@ -3,7 +3,7 @@ package com.pharbers
 import com.pharbers.aggregate.common.phFactory
 import com.pharbers.aggregate.ppt.aggregateForPPT
 import com.pharbers.spark.util.readCsv
-import org.apache.spark.sql.functions.{col, lit}
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.DoubleType
 
 object aggregateTest extends App {
@@ -18,7 +18,9 @@ object aggregateTest extends App {
 		.na.fill("")
 		.withColumn("Sales", col("Sales").cast(DoubleType))
     	.withColumn("market", lit("降糖药市场"))
-
+//	monotonicallyIncreasingId
+	val testDF = chcDF.withColumn("rank", lit(monotonically_increasing_id() + 1))
+	testDF.show(false)
 	val aggrate = aggregateForPPT()
 	//Sales
 	val salesMap = aggrate.aggregateSales(chcDF)

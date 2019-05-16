@@ -1,17 +1,17 @@
 package com.pharbers.aggregate.ppt
 
+import com.pharbers.aggregate.moudle.{afteraggredData, chcMongleData}
 import org.apache.spark.sql.expressions.UserDefinedFunction
-import org.apache.spark.sql.{Column, DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.functions._
+import com.pharbers.data.util._
+import org.apache.spark.sql.types._
+import org.bson.types.ObjectId
 
 case class aggregateForTable() {
 	//1. df filter
 	val func_filter: (Row, List[String], String) => Boolean = (row, lst, str) => {
 		lst.contains(row.getAs[String](str))
-	}
-
-	val func_mergecol: UserDefinedFunction = udf {
-		(str1: String, str2: String) => str1 + str2
 	}
 
 	def df_filter(df: DataFrame, lst: List[(String, List[String])]): DataFrame = {
@@ -21,89 +21,118 @@ case class aggregateForTable() {
 		}
 	}
 
-	//2. df col merge
-	def df_merge(df: DataFrame, lst: List[String]): DataFrame = {
-		df.withColumn("titles", func_mergecol(col(lst.head), col(lst.last)))
-	}
-
-	//3. df poivt
-	def df_poivt(df: DataFrame, lst: List[String], str: String): DataFrame = {
-		df.groupBy(lst.head, lst.tail: _*)
-			.pivot(str)
-			.sum("value")
-			.na.fill(0)
-	}
-
-	val func_addCol: (DataFrame, List[String]) => DataFrame = (df, lst) => {
-		if (lst.isEmpty) df
-		else func_addCol(df.withColumn(lst.head, lit(0.0)), lst.tail)
-	}
-
-	//4. df select
-	def df_select(df: DataFrame, lst: List[String]): DataFrame = {
-		val colList = df.columns.toList
-		val diffList = lst.diff(colList)
-		val dfTemp = func_addCol(df, diffList)
-		dfTemp.select(lst.head, lst.tail: _*)
-	}
+	def addColumnIndex(df: DataFrame) = sparkDriver.sqc.createDataFrame(
+		// Add Column index
+		df.rdd.zipWithIndex.map { case (row, columnindex) => Row.fromSeq(row.toSeq :+ (columnindex + 1)) },
+		// Create schema
+		StructType(df.schema.fields :+ StructField("rank", LongType, false))
+	)
 
 
 	//5. df sort
-	def df_sort(df: DataFrame, limitNum: Int, sortMap: Map[String, Column], sortStr: String, keyProdList: List[String]): DataFrame = {
-		val takeList = sortMap.values.toList.map(x => -x)
-		val sortList = sortMap.map(x => {
-			if (x._1 == "desc") -x._2
-			else x._2
-		}).toList
-		val func_filter: UserDefinedFunction = udf {
+	def df_sort(df: DataFrame, keyProdList: List[String], limitNum: Int, sortOrder: String, otherTag: String,
+	            rankData: String, rankValueType: String): DataFrame = {
+		val sortMap = Map("asc" -> col("rank"), "desc" -> -col("rank"))
+		val func_filter_keyProd: UserDefinedFunction = udf {
 			str: String => keyProdList.contains(str.split(31.toChar.toString).head)
 		}
-		val keyProductDF = df.filter(func_filter(col("key")))
-		val dfTop = if (keyProdList.isEmpty) df.filter(col("key") =!= "其他").sort(takeList: _*).limit(limitNum)
-			.union(keyProductDF)
-			.sort(sortList: _*)
-		else df.filter(col("key") =!= "其他" && !func_filter(col("key"))).sort(takeList: _*).limit(limitNum)
-			.union(keyProductDF)
-			.sort(sortList: _*)
-		val func_nomal: DataFrame => DataFrame = dataframe => dataframe.filter(col("key") === "其他")
-		val func_other: DataFrame => DataFrame = dataframe => {
-			val func_filter: (String, List[String]) => Boolean = (str, lst) => {
-				if (lst.contains(str)) false
-				else true
-			}
-			val colList = dataframe.columns.filter(x => x != "key").map(x => sum(x).as(x))
-			val keyList = dfTop.select("key").collect().map(x => x.getString(0)).toList
-			val otherDF = dataframe.filter(x => func_filter(x.get(0).toString, keyList))
-				.withColumn("key", lit("其他"))
-				.groupBy("key")
-				.agg(colList.head, colList.tail: _*)
-			otherDF
+		val rankDF = addColumnIndex(df.filter(col("valueType") === rankValueType &&
+			col("date") === rankData && col("key") =!= "其他").sort(-col("value")))
+		val keyProductDF = rankDF.filter(func_filter_keyProd(col("key")))
+
+		val topDF = (if (keyProdList.isEmpty) rankDF.limit(limitNum)
+		else rankDF.filter(!func_filter_keyProd(col("key"))).limit(limitNum).union(keyProductDF))
+			.sort(sortMap(sortOrder))
+		val keyList = topDF.select("key").collect().map(x => x.getString(0)).toList
+
+		val func_filter_other: (String, List[String]) => Boolean = (str, lst) => {
+			if (lst.contains(str)) true
+			else false
 		}
-		val funcMap = Map("nomal" -> func_nomal, "other" -> func_other)
-		val dfOther = funcMap(sortStr)(df)
-		dfOther.union(dfTop)
+		val noOtherFunc: DataFrame => DataFrame = dataframe => {
+			val formatList = List("key", "valueType", "date", "city", "keyType", "value")
+			val colList = dataframe.columns.filter(x => !formatList.contains(x)).map(x => first(x).as(x))
+			dataframe.filter(x => !func_filter_other(x.getAs[String]("key"), keyList))
+				.withColumn("key", lit("其他"))
+				.groupBy(formatList.head, formatList.tail.init: _*)
+				.agg(sum("value").as("value"), colList: _*)
+				.withColumn("rank", lit(0))
+		}
+		val haveOtherFunc: DataFrame => DataFrame = dataframe => dataframe.filter(col("key") === "其他")
+			.withColumn("rank", lit(0))
+		val otherDFMap = Map("noOther" -> noOtherFunc, "other" -> haveOtherFunc)
+		import sparkDriver.ss.implicits._
+		val topKeyDF = df.filter(x => func_filter_other(x.getAs[String]("key"), keyList))
+			.join(topDF.select($"key".as("topKey"), $"rank"), col("key") === col("topKey"))
+			.drop("topKey")
+		val resultDF = if (otherTag == "normal") topKeyDF
+		else otherDFMap(otherTag)(df).unionByName(topKeyDF)
+		resultDF
 	}
 
 	//6. df collect
-	def df_collect(df: DataFrame): List[List[String]] = {
-		val arr = df.collect().map(x => x.toSeq.toList).map(x => x.map(y => y.toString)).toList
-		arr
+	def df_collect(df: DataFrame, dateList: List[String], selectList: List[String], titleList: List[String],
+	               tableIndex: String, sortOrder: String): DataFrame = {
+		import sparkDriver.ss.implicits._
+		val valueListAll = List("sales", "share", "growth", "shareGrowth", "EI", "moleShare", "moleGrowth",
+			"moleShareGrowth", "moleEI")
+		val valueList = selectList.filter(x => valueListAll.contains(x))
+		val lstSize = valueList.size * dateList.size
+		val infoList = selectList.filter(x => !valueListAll.contains(x))
+		val sortAsc: List[afteraggredData] => List[afteraggredData] = lst => lst.sortBy(x => -x.rank)
+		val sortDesc: List[afteraggredData] => List[afteraggredData] = lst => lst.sortBy(x => x.rank)
+		val sortMap = Map("asc" -> sortAsc, "desc" -> sortDesc)
+		val func_sortRank: List[afteraggredData] => List[afteraggredData] = lst => {
+			lst.filter(x => x.key == "其他") ++ sortMap(sortOrder)(lst.filter(x => x.key != "其他"))
+		}
+		val result = df.toJavaRDD.rdd.map(x => {
+			val idx = valueList.indexOf(x.getAs[String]("valueType")) * dateList.size + dateList.indexOf(x.getAs[String]("date"))
+			afteraggredData(x.getAs[String]("market"), x.getAs[String]("city"),
+				x.getAs[String]("date"), x.getAs[String]("key"), x.getAs[String]("keyType"),
+				x.getAs[Double]("value"), x.getAs[String]("valueType"),
+				x.getAs[String]("product_name"), x.getAs[String]("mole_name"),
+				x.getAs[String]("oad_type"), x.getAs[String]("package_des"),
+				x.getAs[String]("pack_number"), x.getAs[String]("corp_name"),
+				x.getAs[String]("delivery_way"), x.getAs[String]("dosage_name"),
+				x.getAs[String]("product_id"), x.getAs[String]("pack_id"),
+				x.getAs[String]("atc3"), rank = x.getAs[Long]("rank"),
+				valueList = List.fill(idx)(0.0) ++ List(x.getAs[Double]("value")) ++ List.fill(lstSize - idx - 1)(0.0)
+			)
+		}).keyBy(x => x.key)
+			.reduceByKey((left, rigth) => {
+				left.valueList = left.valueList.zip(rigth.valueList).map(value => value._1 + value._2)
+				left
+			}).map(x => List(x._2))
+			.keyBy(x => (tableIndex, tableIndex))
+			.reduceByKey((left, rigth) => {
+				left ++ rigth
+			}).map(x => {
+			val resultList = titleList :: func_sortRank(x._2).map(x => {
+				val valueMap = x.getResultMap()
+				infoList.map(infoKey => valueMap(infoKey)) ++ x.valueList.map(_.toString)
+			})
+			val resultMap = resultList.zipWithIndex.flatMap { case (arr, idx1) =>
+				arr.zipWithIndex.map { case (value, idx2) =>
+					Map("coordinate" -> ((idx2 + 65).toChar + (idx1 + 1).toString), "value" -> value)
+				}
+			}
+			chcMongleData(ObjectId.get().toString, tableIndex, resultMap)
+		}).toDF()
+		result
 	}
 
 	val func_key: UserDefinedFunction = udf {
 		str: String => str.split(31.toChar.toString).head
 	}
 
-	def getTableResult(df: DataFrame, filterList: List[(String, List[String])], mergeList: List[String], poivtList: List[String],
-	                   selectedList: List[String], limitNum: Int, sortMap: Map[String, Column], sortStr: String,
-	                   keyProdList: List[String]): List[List[String]] = {
+	def getTableResult(df: DataFrame, filterList: List[(String, List[String])], selectedList: List[String],
+	                   keyProdList: List[String], dateList: List[String], titleList: List[String],
+	                   valueTypeList: List[String], limitNum: Int, sortOrder: String, otherTag: String,
+	                   tableIndex: String): DataFrame = {
 		val filteredDF = df_filter(df, filterList).filter(col("key") =!= "total")
-		val mergedDF = df_merge(filteredDF, mergeList)
-		val poivtDF = df_poivt(mergedDF, poivtList, "titles")
-		val selectedDF = df_select(poivtDF, selectedList)
-		val shortedDF = df_sort(selectedDF, limitNum, sortMap, sortStr, keyProdList)
+		val shortedDF = df_sort(filteredDF, keyProdList, limitNum, sortOrder, otherTag, dateList.last, valueTypeList.head)
 			.withColumn("key", func_key(col("key")))
-		val result = df_collect(shortedDF)
+		val result = df_collect(shortedDF, dateList, selectedList, titleList, tableIndex, sortOrder)
 		result
 	}
 }

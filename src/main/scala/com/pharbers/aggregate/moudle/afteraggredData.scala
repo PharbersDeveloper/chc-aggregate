@@ -24,18 +24,25 @@ case class afteraggredData(
 	                          var growthList: List[Double] = List(),
 	                          var shareGrowth: List[Double] = List(),
 	                          var keyList: List[String] = List(),
+	                          var valueList: List[Double] = List(),
 	                          var dateList: List[String] = List(),
 	                          var mole_nameList: List[String] = List(),
-	                          var oad_typeList: List[String]= List(),
+	                          var oad_typeList: List[String] = List(),
 	                          var package_desList: List[String] = List(),
 	                          var pack_numberList: List[String] = List(),
 	                          var corp_nameList: List[String] = List(),
-		                      var delivery_wayList: List[String] = List(),
-		                      var dosage_nameList: List[String] = List(),
-		                      var product_idList: List[String] = List(),
-		                      var pack_idList: List[String] = List(),
-		                      var atc3List: List[String] = List(),
-	                          var cityList: List[String] = List()
+	                          var delivery_wayList: List[String] = List(),
+	                          var dosage_nameList: List[String] = List(),
+	                          var product_idList: List[String] = List(),
+	                          var pack_idList: List[String] = List(),
+	                          var atc3List: List[String] = List(),
+	                          var cityList: List[String] = List(),
+	                          var rank: Long = 0
                           ) extends Serializable {
-
+	def getResultMap(): Map[String, String] = Map("market" -> market, "city" -> city, "date" -> date, "key" -> key,
+		"keyType" -> keyType, "value" -> value.toString, "valueType" -> valueType, "product_name" -> product_name,
+		"mole_name" -> mole_name, "oad_type" -> oad_type, "package_des" -> package_des, "pack_number" -> pack_number,
+		"corp_name" -> corp_name, "delivery_way" -> delivery_way, "dosage_name" -> dosage_name,
+		"product_id" -> product_id, "pack_id" -> pack_id, "atc3" -> atc3, "rank" -> rank.toString
+	)
 }
