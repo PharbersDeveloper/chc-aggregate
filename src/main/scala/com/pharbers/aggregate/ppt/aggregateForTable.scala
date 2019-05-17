@@ -108,7 +108,8 @@ case class aggregateForTable() {
 				left ++ rigth
 			}).map(x => {
 			val resultList = titleList :: func_sortRank(x._2).map(x => {
-				val valueMap = x.getResultMap()
+				val valueMapTemp = x.getResultMap()
+				val valueMap = valueMapTemp ++ valueMapTemp.filter(x => x._1 == "key").map(x => x._1 -> x._2.split(31.toChar.toString).head)
 				infoList.map(infoKey => valueMap(infoKey)) ++ x.valueList.map(_.toString)
 			})
 			val resultMap = resultList.zipWithIndex.flatMap { case (arr, idx1) =>
@@ -131,7 +132,6 @@ case class aggregateForTable() {
 	                   tableIndex: String): DataFrame = {
 		val filteredDF = df_filter(df, filterList).filter(col("key") =!= "total")
 		val shortedDF = df_sort(filteredDF, keyProdList, limitNum, sortOrder, otherTag, dateList.last, valueTypeList.head)
-			.withColumn("key", func_key(col("key")))
 		val result = df_collect(shortedDF, dateList, selectedList, titleList, tableIndex, sortOrder)
 		result
 	}
