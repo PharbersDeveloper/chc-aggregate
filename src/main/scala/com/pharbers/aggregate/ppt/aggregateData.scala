@@ -417,14 +417,23 @@ case class aggregateData() extends Serializable {
 				else corp
 			}
 		}
+
+		val func_replace_mole: UserDefinedFunction = udf {
+			mole: String => {
+				if (mole == "牡蛎碳酸钙") "碳酸钙"
+				else if (mole == "碳酸钙,维生素D3" || mole == "碳酸钙D3") "碳酸钙维D3"
+				else mole
+			}
+		}
+
 		val resultDF = df.select("PRODUCT_ID", "SALES", "UNITS", "DEV_PRODUCT_NAME", "DEV_MOLE_NAME",
 			"DEV_PACKAGE_DES", "DEV_PACKAGE_NUMBER", "DEV_CORP_NAME", "IMS_DELIVERY_WAY", "DEV_DOSAGE_NAME", "DEV_PACK_ID",
-			"TIME", "name", "ATC3", "OAD_TYPE")
+			"TIME", "name", "ATC3", "OAD_TYPE", "MARKET")
 			.withColumnRenamed("name", "CITY")
-			.withColumn("MARKET", lit("降糖药市场"))
 			.withColumn("DEV_PACKAGE_NUMBER", col("DEV_PACKAGE_NUMBER").cast(StringType))
 			.withColumn("DEV_PACK_ID", col("DEV_PACK_ID").cast(StringType))
 			.withColumn("DEV_CORP_NAME", func_replace(col("DEV_CORP_NAME")))
+    		.withColumn("DEV_MOLE_NAME", func_replace_mole(col("DEV_MOLE_NAME")))
 			.na.fill("")
 		resultDF
 	}
@@ -460,16 +469,15 @@ case class aggregateData() extends Serializable {
 			//TODO: 全国的moleShare
 			val nationwideMoleResult = getShareDF(df_keyWithcity, "nationwideMoleShare")
 			val nationwidemoleSalesRDD = nationwideMoleResult.filter(x => x.valueType == "sales")
-			val nationwideMoleSalesGrowthRDD = salesGrowth(nationwidemoleSalesRDD, "growth")
+//			val nationwideMoleSalesGrowthRDD = salesGrowth(nationwidemoleSalesRDD, "growth")
 			val nationwideMoleShareRDD = nationwideMoleResult.filter(x => x.valueType == "moleShare")
 			val nationwideMoleEIRDD = moleEI(nationwideMoleShareRDD, "moleEI")
-			val testDF = nationwideMoleEIRDD.toDF()
 			val nationwideMoleShareGrowthRDD = shareGrowth(nationwideMoleShareRDD, "moleShareGrowth")
 
 			//moleShare city
 			val moleResult = getShareDF(df_keyWithcity, "moleShare")
 			val moleSalesRDD = moleResult.filter(x => x.valueType == "sales")
-			val molesalesGrowthRDD = salesGrowth(moleSalesRDD, "growth")
+//			val molesalesGrowthRDD = salesGrowth(moleSalesRDD, "growth")
 			val moleShareRDD = moleResult.filter(x => x.valueType == "moleShare")
 			val moleEIRDD = moleEI(moleShareRDD, "moleEI")
 			val moleShareGrowthRDD = shareGrowth(moleShareRDD, "moleShareGrowth")

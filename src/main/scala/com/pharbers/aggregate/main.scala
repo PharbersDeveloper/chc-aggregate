@@ -1,114 +1,63 @@
 package com.pharbers.aggregate
 
-import org.apache.spark.sql.functions._
-import com.pharbers.aggregate.common.phFactory
-import com.pharbers.aggregate.moudle.aggredData
-import com.pharbers.spark.util.readCsv
+import com.pharbers.aggregate.ppt.aggregateData
+import com.pharbers.aggregate.util.saveDF2mongo
+import com.pharbers.data.conversion.{CHCConversion, ProductDevConversion, ProductImsConversion}
+import com.pharbers.pactions.actionbase.{DFArgs, MapArgs, SingleArgFuncArgs}
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.expressions.UserDefinedFunction
-import org.apache.spark.sql.types.DoubleType
+import com.pharbers.data.util._
+import com.pharbers.data.util.ParquetLocation._
+import org.apache.spark.sql.functions.lit
 
 object main extends App with Serializable {
-//	val sprakDriver = phFactory.getSparkInstance()
-//
-//	import sprakDriver.conn_instance
-//
-//	import sprakDriver.ss.implicits._
-//
-//	val chcDF = sprakDriver.setUtil(readCsv()).readCsv("/test/OAD CHC data for 5 cities to 2018Q3 v3.csv")
-//
-//	val func_castTime: UserDefinedFunction = udf {
-//		str: String => {
-//			val ymStr = str.split("Q")
-//			val year = ymStr.head
-//			val month = ymStr.last.toInt
-//			if (month < 10) {
-//				year.toString + "0" + month.toString
-//			} else {
-//				year.toString + month.toString
-//			}
-//		}
-//	}
-//
-//	val chcTempDF = chcDF.select("city", "Date", "OAD类别", "Molecule_Desc", "分子", "Prod_Desc", "MNF_Desc", "Sales")
-//		.na.fill("")
-//		.withColumn("Sales", col("Sales").cast(DoubleType))
-//
-//	val func_group: (DataFrame, List[String], String) => DataFrame = (df, groupKeyList, sumCol) => {
-//		df.groupBy(groupKeyList.head, groupKeyList.tail: _*)
-//			.sum(sumCol)
-//			.withColumnRenamed("sum(" + sumCol + ")", sumCol)
-//	}
-//
-//	val oadDF = func_group(chcTempDF, List("city", "Date", "OAD类别"), "Sales")
-//	val moleDF = func_group(chcTempDF, List("city", "Date", "分子"), "Sales")
-//	val prodDF = func_group(chcTempDF, List("city", "Date", "Prod_Desc"), "Sales")
-//	val mnfDF = func_group(chcTempDF, List("city", "Date", "MNF_Desc"), "Sales")
-//
-//	val result = oadDF.toJavaRDD.rdd.map(x => (x(0).toString, x(1).toString, Seq(x(2).toString), Seq(x(3).toString.toDouble)))
-//		.keyBy(x => (x._1, x._2))
-//		.reduceByKey((left, right) => {
-//			(left._1, left._2, left._3 ++ right._3, left._4 ++ right._4)
-//		}).map(x => {
-//		val totalResult = x._2._4.sum
-//		(x._1._1, x._1._2, x._2._3, x._2._4.map(sales => sales / totalResult))
-//	}).toDF("city", "Date", "OAD类别", "Sales")
-//
-//	result.show(false)
-//
-//	val result1 = result.flatMap(x => {
-//		val oadArray = x.getAs[Seq[String]](2)
-//		val salesArray = x.getAs[Seq[Double]](3)
-//		oadArray.map(oad => aggredData(x.getString(0), x.getString(1), oad, salesArray(oadArray.indexOf(oad))))
-//	})
-//	result1.show(false)
-//
-//	result1.toDF().sort("city", "Date").show(false)
+	//	val chcFile1 = "/test/OAD CHC data for 5 cities to 2018Q3 v3.csv"
+	val ohaFile = "/test/chc/OAD CHC data for 5 cities to 2018Q4.csv"
+	val caFile = "/test/CHC_CA_7cities_Delivery.csv"
+	val piCvs = ProductImsConversion()
+	val chcCvs = CHCConversion()
 
+	val productImsDIS_ca = piCvs.toDIS(MapArgs(Map(
+		"productImsERD" -> DFArgs(Mongo2DF(PROD_IMS_LOCATION.split("/").last))
+		//		, "atc3ERD" -> DFArgs(Parquet2DF(PROD_ATC3TABLE_LOCATION))
+		//		, "oadERD" -> DFArgs(Parquet2DF(PROD_OADTABLE_LOCATION))
+		, "productDevERD" -> DFArgs(Mongo2DF("prod_dev9"))
+	))).getAs[DFArgs]("productImsDIS")
 
+	val productImsDIS_oha = piCvs.toDIS(MapArgs(Map(
+		"productImsERD" -> DFArgs(Mongo2DF(PROD_IMS_LOCATION.split("/").last))
+		, "atc3ERD" -> DFArgs(Parquet2DF(PROD_ATC3TABLE_LOCATION))
+		, "oadERD" -> DFArgs(Parquet2DF(PROD_OADTABLE_LOCATION))
+		, "productDevERD" -> DFArgs(Mongo2DF("prod_dev9"))
+	))).getAs[DFArgs]("productImsDIS")
 
+	def getchcDF(productImsDIS: DataFrame, filePaht: String): DataFrame = {
+		val chcDF = CSV2DF(filePaht)
+		//		val chcDFCount = chcDF.count()
+		val cityDF = Parquet2DF(HOSP_ADDRESS_CITY_LOCATION)
+		val chcERD = chcCvs.toERD(MapArgs(Map(
+			"chcDF" -> DFArgs(chcDF)
+			, "dateDF" -> DFArgs(Parquet2DF(CHC_DATE_LOCATION))
+			, "cityDF" -> DFArgs(cityDF)
+			, "productDIS" -> DFArgs(productImsDIS)
+			, "addCHCProdFunc" -> SingleArgFuncArgs { df: DataFrame =>
+				ProductDevConversion().toERD(MapArgs(Map(
+					"chcDF" -> DFArgs(df)
+				))).getAs[DFArgs]("productDevERD")
+			}
+		))).getAs[DFArgs]("chcERD")
+		val chcDIS = chcCvs.toDIS(MapArgs(Map(
+			//			"chcERD" -> DFArgs(Mongo2DF(CHC_LOCATION.split("/").last))
+			"chcERD" -> DFArgs(chcERD)
+			, "dateERD" -> DFArgs(Parquet2DF(CHC_DATE_LOCATION))
+			, "cityERD" -> DFArgs(Parquet2DF(HOSP_ADDRESS_CITY_LOCATION))
+			, "productDIS" -> DFArgs(productImsDIS)
+		))).getAs[DFArgs]("chcDIS")
+		chcDIS
+	}
 
-
-	//	val func_zip: UserDefinedFunction = udf{
-	//		(oadType: Array[String], salesArray: Array[Double]) => oadType.map(x => x + 31.toChar.toString + salesArray(oadType.indexOf(x)).toString)
-	//	}
-	//	val result1 = result.withColumn("oadTemp", func_zip(col("OAD类别"), col("Sales")))
-	//		.withColumn("test", explode(col("oadTemp")))
-	//	result1.show(false)
-
-
-	//	val sumOadDF = func_group(oadDF, List("city", "Date"), "Sales")
-	//		.withColumn("OAD类别", lit("total"))
-	//		.select("city", "Date", "OAD类别", "Sales")
-	//		.union(oadDF)
-	//	val sumMoleDF = func_group(moleDF, List("city", "Date"), "Sales")
-	//		.withColumn("分子", lit("total"))
-	//		.select("city", "Date", "分子", "Sales")
-	//		.union(moleDF)
-	//	val sumProdDF = func_group(prodDF, List("city", "Date"), "Sales")
-	//		.withColumn("Prod_Desc", lit("total"))
-	//		.select("city", "Date", "Prod_Desc", "Sales")
-	//		.union(prodDF)
-	//	val sumMnfDF = func_group(mnfDF, List("city", "Date"), "Sales")
-	//		.withColumn("MNF_Desc", lit("total"))
-	//		.select("city", "Date", "MNF_Desc", "Sales")
-	//		.union(mnfDF)
-	//
-	//	import org.apache.spark._
-	//
-	//	val result = sumOadDF.groupByKey(x => (x(0).toString, x(1).toString))
-	//		.reduceGroups((left, right) => {
-	//			Row(left(0).toString, left(1).toString, Array(left(2).toString, right(2).toString), Array(left(3).toString.toDouble, right(3).toString.toDouble))
-	//		})
-	//
-	//	result.show(false)
-	//	result.show(false)
-	//	println("oadDF")
-	//	sumOadDF.show(false)
-	//	println("moleDF")
-	//	sumMoleDF.show(false)
-	//	println("prodDF")
-	//	sumProdDF.show(false)
-	//	println("mnfDF")
-	//	sumMnfDF.show(false)
+	val caDF = getchcDF(productImsDIS_ca, caFile).withColumn("MARKET", lit("钙补充剂市场"))
+	val ohaDF = getchcDF(productImsDIS_oha, ohaFile).withColumn("MARKET", lit("口服降糖药市场"))
+	val chcDIS = caDF.unionByName(ohaDF)
+	val aggreagteDFTemp = aggregateData().getAggregate(chcDIS)
+	saveDF2mongo().saveDF(aggreagteDFTemp, "aggregateData")
 }
